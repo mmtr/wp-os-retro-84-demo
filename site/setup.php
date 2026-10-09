@@ -87,19 +87,63 @@ add_action(
 	}
 );
 
-// Open the Documents folder next to the Dashboard, once per visit.
+// Arrange the first view, once per visit: the Dashboard clear of the
+// desktop icons, and the Documents folder beside it with the post about
+// this demo selected, so its side pane previews it.
 add_action(
 	'admin_footer',
 	function () {
 		$folder = (int) get_option( 'demo_documents_folder' );
+		$about  = (int) get_option( 'demo_about_post' );
 		if ( ! $folder || get_option( 'demo_documents_opened' ) || 'openstation' !== ( $_GET['page'] ?? '' ) ) {
 			return;
 		}
 		update_option( 'demo_documents_opened', 1 );
-		$file = wp_json_encode( array( 'type' => 'folder', 'ref' => (string) $folder, 'title' => 'Documents', 'icon' => 'dashicons-portfolio', 'previewUrl' => '', 'exists' => true ) );
-		// Opened through the same opener a double-click uses, then moved
-		// toward the right so the Dashboard stays in view behind it.
-		echo "<script>addEventListener('load',function(){wp.os.whenReady(function(){setTimeout(function(){wp.os.files.open(wp.os.files.resolve($file)).then(function(){var w=wp.os.windowManager.getById('os-folder-$folder');if(!w){return;}var e=w.element,p=e.parentElement;e.style.left=Math.max(16,p.clientWidth-e.offsetWidth-40)+'px';e.style.top=Math.round(p.clientHeight*0.2)+'px';});},800);});});</script>";
+		$file   = wp_json_encode( array( 'type' => 'folder', 'ref' => (string) $folder, 'title' => 'Documents', 'icon' => 'dashicons-portfolio', 'previewUrl' => '', 'exists' => true ) );
+		$script = <<<'JS'
+addEventListener( 'load', function () {
+	wp.os.whenReady( function () {
+		setTimeout( arrange, 800 );
+	} );
+} );
+function arrange() {
+	var wm = wp.os.windowManager;
+	var dash = wm.getAll().find( function ( w ) {
+		return w.config.baseId === 'index-php' || w.config.title === 'Dashboard';
+	} );
+	if ( dash ) {
+		var area = dash.element.parentElement, box = area.getBoundingClientRect(), right = 0;
+		document.querySelectorAll( '.os-icon, .os-file-tile' ).forEach( function ( icon ) {
+			if ( ! icon.closest( '.os-window' ) ) {
+				right = Math.max( right, icon.getBoundingClientRect().right - box.left );
+			}
+		} );
+		var left = Math.round( right + 12 );
+		dash.element.style.left = left + 'px';
+		if ( left + dash.element.offsetWidth > area.clientWidth - 16 ) {
+			dash.element.style.width = Math.max( 480, area.clientWidth - 16 - left ) + 'px';
+		}
+	}
+	wp.os.files.open( wp.os.files.resolve( FOLDER_FILE ) ).then( function () {
+		var w = wm.getById( 'os-folder-FOLDER_ID' );
+		if ( ! w ) {
+			return;
+		}
+		var e = w.element, p = e.parentElement, tries = 0;
+		e.style.left = Math.max( 16, p.clientWidth - e.offsetWidth - 40 ) + 'px';
+		e.style.top = Math.round( p.clientHeight * 0.2 ) + 'px';
+		( function select() {
+			var tile = e.querySelector( 'os-tile[data-file-ref="ABOUT_ID"]' );
+			if ( tile ) {
+				tile.click();
+			} else if ( tries++ < 20 ) {
+				setTimeout( select, 150 );
+			}
+		} )();
+	} );
+}
+JS;
+		echo '<script>' . strtr( $script, array( 'FOLDER_FILE' => $file, 'FOLDER_ID' => $folder, 'ABOUT_ID' => $about ) ) . '</script>';
 	}
 );
 PHP
@@ -134,9 +178,25 @@ foreach ( array( 'About me', 'Guestbook', 'Links' ) as $title ) {
 		)
 	);
 }
+// A short note about the demo, first in the Documents folder.
+$name  = $theme['manifest']['name'];
+$about = wp_insert_post(
+	array(
+		'post_title'   => 'About this demo',
+		'post_status'  => 'publish',
+		'post_author'  => $user->ID,
+		'post_content' => '<!-- wp:paragraph --><p>This is WordPress, running entirely in your browser. Every visit starts a fresh site, and nothing you change here is saved.</p><!-- /wp:paragraph -->'
+			. '<!-- wp:paragraph --><p>The desktop is <a href="https://openstation.me">WordPress OpenStation</a>, a plugin that turns wp-admin into a desktop with windows, a dock and files on the desk. This look is its <a href="' . esc_url( 'https://github.com/mmtr/wp-os-' . sanitize_title( $name ) ) . '">' . esc_html( $name ) . '</a> theme.</p><!-- /wp:paragraph -->'
+			. '<!-- wp:paragraph --><p>WordPress runs in the browser with <a href="https://wordpress.org/playground/">WordPress Playground</a>, and this page is hosted on <a href="https://spacefast.com">Spacefast</a>.</p><!-- /wp:paragraph -->'
+			. '<!-- wp:paragraph --><p>Go ahead and click around.</p><!-- /wp:paragraph -->',
+	)
+);
+update_option( 'demo_about_post', $about );
+
 $folder = openstation_files_create_folder( $user->ID, array( 'name' => 'Documents' ) );
 if ( ! is_wp_error( $folder ) ) {
 	update_option( 'demo_documents_folder', $folder );
+	openstation_files_place_at_next_free_slot( $user->ID, $folder, 'post', (string) $about );
 	openstation_files_place( $user->ID, 0, 'folder', (string) $folder, array( 'x' => 0, 'y' => 2 ) );
 	foreach ( array_slice( $ids, 0, 3 ) as $id ) {
 		openstation_files_place_at_next_free_slot( $user->ID, $folder, 'post', (string) $id );
