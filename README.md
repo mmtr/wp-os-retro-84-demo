@@ -11,6 +11,7 @@ Every visit starts a fresh WordPress in the visitor's own browser. Nothing is st
 - `site/index.html` embeds Playground through its JavaScript client and shows a loading window until WordPress is ready. It fetches the two ZIPs from this site and hands them to Playground as files, because Playground runs on its own domain and can only fetch files that allow it.
 - `site/openstation.zip` is a trunk build of OpenStation, and `site/theme.zip` is the theme's `main` branch.
 - `site/setup.php` runs once inside Playground. It installs the theme, turns OpenStation on with every intro already seen, applies the theme's recommended settings, and adds a few posts, pages and a folder on the desk.
+- On phones and tablets the page doesn't start WordPress. It plays `site/demo.mp4`, a short screen recording, and links to try the demo anyway.
 
 ## Updating
 

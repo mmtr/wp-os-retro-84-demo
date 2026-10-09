@@ -22,6 +22,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
 .bar i { display: block; width: 0; height: 100%; animation: fill 14s steps( 34 ) forwards; }
 @keyframes fill { to { width: 96%; } }
 .links { display: flex; justify-content: space-between; }
+.phone { display: none; }
+html.phone-mode, html.phone-mode body { height: auto; overflow: auto; }
+html.phone-mode #wp, html.phone-mode .splash:not( .phone ) { display: none; }
+html.phone-mode .phone { display: grid; position: static; min-height: 100vh; padding: 16px; box-sizing: border-box; }
+.phone .box { width: auto; max-width: 360px; zoom: 1.5; }
+.phone video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; margin: 10px 0; border: 1px solid #000; box-sizing: border-box; background: #000; }
 @font-face { font-family: "OS Retro Chicago"; src: url(fonts/os-retro-chicago.woff) format("woff"); }
 @font-face { font-family: "OS Retro Geneva"; src: url(fonts/os-retro-geneva.woff) format("woff"); }
 html, body { background: #fff url(desk.svg) 0 0 / 2px 2px; image-rendering: pixelated; }
@@ -35,9 +41,27 @@ html, body { background: #fff url(desk.svg) 0 0 / 2px 2px; image-rendering: pixe
 .bar i { background: url(desk.svg) 0 0 / 2px 2px; image-rendering: pixelated; }
 a { color: #000; }
 </style>
+<script>
+// Phones get a video instead: the desktop does not fit, and WordPress is a big download.
+if ( matchMedia( '(hover: none) and (pointer: coarse), (max-width: 700px)' ).matches ) {
+	document.documentElement.classList.add( 'phone-mode' );
+}
+</script>
 </head>
 <body>
 <iframe id="wp" title="WordPress OS Retro 84"></iframe>
+<div class="splash phone">
+	<div class="box">
+		<div class="title"><span>WordPress OS Retro 84</span></div>
+		<div class="body">
+			<p>This demo needs a bigger screen.</p>
+			<p>It's real WordPress, running entirely in your browser. Open this page on a computer to try it. Until then, here's a quick look.</p>
+			<video data-src="demo.mp4" data-poster="demo.jpg" muted loop playsinline autoplay aria-label="A screen recording of the demo"></video>
+			<p class="links"><a href="https://openstation.me" target="_blank" rel="noopener">WordPress OpenStation</a><a href="https://github.com/mmtr/wp-os-retro-84" target="_blank" rel="noopener">Get Retro 84</a></p>
+			<p><a href="#" class="try">Try it anyway</a></p>
+		</div>
+	</div>
+</div>
 <div class="splash" role="status">
 	<div class="box">
 		<div class="title"><span>WordPress OS Retro 84</span></div>
@@ -50,43 +74,59 @@ a { color: #000; }
 	</div>
 </div>
 <script type="module">
-import { startPlaygroundWeb } from 'https://playground.wordpress.net/client/index.js';
-
 const iframe = document.getElementById( 'wp' );
-const splash = document.querySelector( '.splash' );
+const splash = document.querySelector( '.splash:not( .phone )' );
 const bytes = async ( url ) => new Uint8Array( await ( await fetch( url ) ).arrayBuffer() );
 
-try {
-	// Fetched here, from this site, and handed to Playground as literal
-	// files: Playground runs on another origin and could not fetch them.
-	const [ plugin, theme, setup ] = await Promise.all( [
-		bytes( 'openstation.zip' ),
-		bytes( 'theme.zip' ),
-		fetch( 'setup.php' ).then( ( r ) => r.text() ),
-	] );
-	const client = await startPlaygroundWeb( {
-		iframe,
-		remoteUrl: 'https://playground.wordpress.net/remote.html',
-		blueprint: {
-			preferredVersions: { php: '8.3', wp: 'latest' },
-			landingPage: '/wp-admin/admin.php?page=openstation',
-			login: true,
-			steps: [
-				{ step: 'installPlugin', pluginData: { resource: 'literal', name: 'openstation.zip', contents: plugin }, options: { activate: true } },
-				{ step: 'writeFile', path: '/tmp/theme.zip', data: { resource: 'literal', name: 'theme.zip', contents: theme } },
-				{ step: 'runPHP', code: setup },
-			],
-		},
+async function start() {
+	try {
+		const { startPlaygroundWeb } = await import( 'https://playground.wordpress.net/client/index.js' );
+		// Fetched here, from this site, and handed to Playground as literal
+		// files: Playground runs on another origin and could not fetch them.
+		const [ plugin, theme, setup ] = await Promise.all( [
+			bytes( 'openstation.zip' ),
+			bytes( 'theme.zip' ),
+			fetch( 'setup.php' ).then( ( r ) => r.text() ),
+		] );
+		const client = await startPlaygroundWeb( {
+			iframe,
+			remoteUrl: 'https://playground.wordpress.net/remote.html',
+			blueprint: {
+				preferredVersions: { php: '8.3', wp: 'latest' },
+				landingPage: '/wp-admin/admin.php?page=openstation',
+				login: true,
+				steps: [
+					{ step: 'installPlugin', pluginData: { resource: 'literal', name: 'openstation.zip', contents: plugin }, options: { activate: true } },
+					{ step: 'writeFile', path: '/tmp/theme.zip', data: { resource: 'literal', name: 'theme.zip', contents: theme } },
+					{ step: 'runPHP', code: setup },
+				],
+			},
+		} );
+		await client.isReady();
+		// The desktop paints a moment after the page loads.
+		setTimeout( () => {
+			iframe.classList.add( 'ready' );
+			setTimeout( () => splash.classList.add( 'gone' ), 400 );
+		}, 2500 );
+	} catch ( error ) {
+		document.querySelector( '.status' ).textContent = 'The demo could not start: ' + error.message;
+		console.error( error );
+	}
+}
+
+if ( document.documentElement.classList.contains( 'phone-mode' ) ) {
+	const video = document.querySelector( '.phone video' );
+	video.poster = video.dataset.poster;
+	video.src = video.dataset.src;
+	video.play().catch( () => {} );
+	document.querySelector( '.try' ).addEventListener( 'click', ( event ) => {
+		event.preventDefault();
+		video.pause();
+		document.documentElement.classList.remove( 'phone-mode' );
+		start();
 	} );
-	await client.isReady();
-	// The desktop paints a moment after the page loads.
-	setTimeout( () => {
-		iframe.classList.add( 'ready' );
-		setTimeout( () => splash.classList.add( 'gone' ), 400 );
-	}, 2500 );
-} catch ( error ) {
-	document.querySelector( '.status' ).textContent = 'The demo could not start: ' + error.message;
-	console.error( error );
+} else {
+	start();
 }
 </script>
 </body>
