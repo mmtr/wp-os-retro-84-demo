@@ -86,6 +86,22 @@ add_action(
 		echo "<script>try{localStorage.removeItem('desktop-mode-widgets');localStorage.removeItem('desktop-mode-widgets-geometry');}catch(e){}</script>";
 	}
 );
+
+// Open the Documents folder next to the Dashboard, once per visit.
+add_action(
+	'admin_footer',
+	function () {
+		$folder = (int) get_option( 'demo_documents_folder' );
+		if ( ! $folder || get_option( 'demo_documents_opened' ) || 'openstation' !== ( $_GET['page'] ?? '' ) ) {
+			return;
+		}
+		update_option( 'demo_documents_opened', 1 );
+		$file = wp_json_encode( array( 'type' => 'folder', 'ref' => (string) $folder, 'title' => 'Documents', 'icon' => 'dashicons-portfolio', 'previewUrl' => '', 'exists' => true ) );
+		// Opened through the same opener a double-click uses, then moved
+		// toward the right so the Dashboard stays in view behind it.
+		echo "<script>addEventListener('load',function(){wp.os.whenReady(function(){setTimeout(function(){wp.os.files.open(wp.os.files.resolve($file)).then(function(){var w=wp.os.windowManager.getById('os-folder-$folder');if(!w){return;}var e=w.element,p=e.parentElement;e.style.left=Math.max(16,p.clientWidth-e.offsetWidth-40)+'px';e.style.top=Math.round(p.clientHeight*0.2)+'px';});},800);});});</script>";
+	}
+);
 PHP
 );
 
@@ -120,6 +136,7 @@ foreach ( array( 'About me', 'Guestbook', 'Links' ) as $title ) {
 }
 $folder = openstation_files_create_folder( $user->ID, array( 'name' => 'Documents' ) );
 if ( ! is_wp_error( $folder ) ) {
+	update_option( 'demo_documents_folder', $folder );
 	openstation_files_place( $user->ID, 0, 'folder', (string) $folder, array( 'x' => 0, 'y' => 2 ) );
 	foreach ( array_slice( $ids, 0, 3 ) as $id ) {
 		openstation_files_place_at_next_free_slot( $user->ID, $folder, 'post', (string) $id );
